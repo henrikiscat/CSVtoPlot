@@ -18,7 +18,8 @@ name_pattern = '[^a-öA-Ö0-9_]'
 
 
 def file_chooser():
-    layout = [[Sg.Text('Chose file to import')], [Sg.Input(key="-FILE-", visible=False, enable_events=True), Sg.FileBrowse()]]
+    layout = [[Sg.Text('Chose file to import')], [Sg.Input(key="-FILE-", visible=False, enable_events=True),
+                                                  Sg.FileBrowse()]]
     event, values = Sg.Window('File chooser', layout).read(close=True)
     return values['-FILE-']
 
@@ -38,8 +39,7 @@ def find_header(file):
                 return r_, index_
 
 
-# Time the procedure
-t = time.process_time()
+
 
 
 # Read CVS-file into DataFrame df
@@ -82,7 +82,11 @@ def main_window():
         elif event == '-READ FILE-':
             file = os.path.join(values['-FOLDER-'], values['-FILE LIST-'][0])
             print(file)
+            # Time the procedure
+            t = time.process_time()
             df = file_to_df(file)
+            elapsed_time = time.process_time() - t
+            print("Processen tog totalt: ", elapsed_time, "s")
             window['-COL-'].Update(values=df.columns.values.tolist())
 
     window.close()
@@ -90,11 +94,10 @@ def main_window():
 main_window()
 
 
-print(df.info())
+#print(df.info())
 #df.plot('Current (mA)')
 #plt.show()
 #my_plot(df['Current (mA)'])
-elapsed_time = time.process_time() - t
-print("Processen tog totalt: ", elapsed_time, "s")
+
 plt.show()
 
