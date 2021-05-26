@@ -3,28 +3,20 @@
 import os
 
 import matplotlib.pyplot as plt
-import matplotlib
 import pandas as pd
-import numpy as np
 import PySimpleGUI as Sg
-import re
 import time
-import numpy as np
+import re
 
+ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load On time', 'Step Time (Seconds)']
+from tabulate import tabulate
+
+# Pattern of characters allowed in file naming, used with regular expression (re)
 name_pattern = '[^a-öA-Ö0-9_]'
+global df
 
 
-#custom_time_parser = lambda x: datetime.strptime(x, "%H:%M:%S.%f")
-
-
-def file_chooser():
-    layout = [[Sg.Text('Chose file to import')], [Sg.Input(key="-FILE-", visible=False, enable_events=True),
-                                                  Sg.FileBrowse()]]
-    event, values = Sg.Window('File chooser', layout).read(close=True)
-    return values['-FILE-']
-
-
-# Find first row of data
+# Locate first row of measurement data to be extracted
 def find_header(file):
     r_ = 0
     with open(file, 'r') as cf:
@@ -39,31 +31,62 @@ def find_header(file):
                 return r_, index_
 
 
-
-
-
 # Read CVS-file into DataFrame df
 def file_to_df(_csv_file):
     r, index = find_header(_csv_file)
-    return pd.read_csv(_csv_file, skiprows=r-1, index_col=index)
-
+    df_ = pd.read_csv(_csv_file, skiprows=r - 1, index_col=index, usecols=lambda x: x not in ignored_columns)
+    df_.rename(columns=lambda x: re.sub("\(", "[", re.sub("\)", "]", x)), inplace=True)
+    return df_
 
 
 def my_plot(_df, data):
     _df[data].plot()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
     plt.show()
 
 
-def main_window():
+def plot_to_file(filetype, _df, data, filename):
+    _df[data].plot()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(data[0] + "." + filetype, format=filetype)
+    plt.close()
 
-    left_column = [
-                   [Sg.Text('Filer')], [Sg.Listbox(values=[], enable_events=False, size=(25, 20), key='-FILE LIST-')],
-                   [Sg.Button("Läs in", key="-READ FILE-")]]
-    right_column = [[Sg.Text("Data")], [Sg.Listbox(values=[], size=(25, 20), enable_events=True, k='-COL-',
-                                                  select_mode=Sg.LISTBOX_SELECT_MODE_MULTIPLE)],
-                    [Sg.Button("Visa plot", key='-SHOW PLOT-'), Sg.Button("Spara plot som PDF", key='-SAVE PLOT AS PDF')]]
-    main_layout = [[Sg.Text("Folder"), Sg.In(size=(25, 1), enable_events=True, key='-FOLDER-'), Sg.FolderBrowse()],
-                   [Sg.Column(left_column), Sg.Column(right_column)]]
+
+def export_data(filetype, _df, data, filename):
+    tic = time.process_time()
+    if filetype == "excel":
+        filename = filename + '.xlsx'
+        _df[data].to_excel(filename)
+    elif filetype == "text":
+        filename = filename + '.txt'
+        string_ = _df[data].to_string()
+        with open(filename, 'w') as f:
+            f.write(string_)
+    elif filetype == 'html':
+        filename = filename + '.html'
+        html = _df[data].to_html()
+        with open(filename, 'w') as f:
+            f.write(html)
+    toc = time.process_time()
+    print("Exporten tog: ", (toc - tic), " sekunder")
+
+
+def main_window():
+    global df
+    right_column = [[Sg.Text("Datakolumner")], [Sg.Listbox(values=[], size=(55, 20), enable_events=True, k='-COL-',
+                                                           select_mode=Sg.LISTBOX_SELECT_MODE_MULTIPLE)],
+                    [Sg.Button("Visa plot", key='-SHOW PLOT-'), Sg.Text("Spara plot som:"),
+                     Sg.Combo(values=['pdf'], default_value='pdf', readonly=True, enable_events=False,
+                              key='-PLOT FILE TYPE-'), Sg.Button("Ok", key='-SAVE PLOT AS-'),
+                     Sg.Text("Spara data som:"),
+                     Sg.Combo(values=['excel', 'text', 'html'], default_value='excel', enable_events=False,
+                              readonly=True, key='-FILE TYPE-'), Sg.Button('Ok', key='-EXPORT FILE-')]]
+    main_layout = [[Sg.Text("Open CSV file"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
+                    Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
+                                  initial_folder='/home/henrik/Dokument/Intertek/Mätfiler/SBT8050/')],
+                   [Sg.Column(right_column)]]
     window = Sg.Window("Main window", main_layout)
     while True:
         event, values = window.read()
@@ -71,33 +94,22 @@ def main_window():
             break
         elif event == "-SHOW PLOT-":
             my_plot(df, values['-COL-'])
-        elif event == '-FOLDER-':
-            folder = values['-FOLDER-']
-            try:
-                file_list = os.listdir(folder)
-            except:
-                file_list = []
-            fnames = [f for f in file_list if os.path.isfile(os.path.join(folder, f)) and f.lower().endswith('.csv')]
-            window['-FILE LIST-'].Update(values=fnames)
-        elif event == '-READ FILE-':
-            file = os.path.join(values['-FOLDER-'], values['-FILE LIST-'][0])
+        elif event == '-FILE-':
+            file = values['-FILE-']
             print(file)
-            # Time the procedure
             t = time.process_time()
             df = file_to_df(file)
             elapsed_time = time.process_time() - t
             print("Processen tog totalt: ", elapsed_time, "s")
             window['-COL-'].Update(values=df.columns.values.tolist())
+        elif event == '-EXPORT FILE-':
+            export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
+        elif event == '-SAVE PLOT AS-':
+            # print(df.columns)
+            plot_to_file(values['-PLOT FILE TYPE-'], df, values['-COL-'], values['-COL-'])
 
     window.close()
 
+
 main_window()
-
-
-#print(df.info())
-#df.plot('Current (mA)')
-#plt.show()
-#my_plot(df['Current (mA)'])
-
 plt.show()
-

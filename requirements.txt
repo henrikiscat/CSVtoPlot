@@ -1,0 +1,4 @@
+matplotlib~=3.3.4
+pandas~=1.1.5
+PySimpleGUI~=4.32.1
+setuptools~=56.1.0
