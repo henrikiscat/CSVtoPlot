@@ -108,7 +108,10 @@ def main_window():
             except FileNotFoundError:
                 pass
         elif event == '-EXPORT FILE-':
-            export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
+            try:
+                export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
+            except NameError:
+                Sg.PopupError("Välj en datafil")
         elif event == '-SAVE PLOT AS-':
             # print(df.columns)
             try:
