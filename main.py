@@ -9,7 +9,7 @@ import time
 import re
 
 ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load On time', 'Step Time (Seconds)']
-from tabulate import tabulate
+#from tabulate import tabulate
 
 # Pattern of characters allowed in file naming, used with regular expression (re)
 name_pattern = '[^a-öA-Ö0-9_]'
@@ -95,13 +95,15 @@ def main_window():
         elif event == "-SHOW PLOT-":
             my_plot(df, values['-COL-'])
         elif event == '-FILE-':
-            file = values['-FILE-']
-            print(file)
-            t = time.process_time()
-            df = file_to_df(file)
-            elapsed_time = time.process_time() - t
-            print("Processen tog totalt: ", elapsed_time, "s")
-            window['-COL-'].Update(values=df.columns.values.tolist())
+            try:
+                file = values['-FILE-']
+                t = time.process_time()
+                df = file_to_df(file)
+                elapsed_time = time.process_time() - t
+                print("Processen tog totalt: ", elapsed_time, "s")
+                window['-COL-'].Update(values=df.columns.values.tolist())
+            except FileNotFoundError:
+                Sg.PopupError("Ingen datafil är vald.")
         elif event == '-EXPORT FILE-':
             export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
         elif event == '-SAVE PLOT AS-':
