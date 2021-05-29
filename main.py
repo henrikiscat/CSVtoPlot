@@ -93,7 +93,10 @@ def main_window():
         if event == Sg.WINDOW_CLOSED:
             break
         elif event == "-SHOW PLOT-":
-            my_plot(df, values['-COL-'])
+            try:
+                my_plot(df, values['-COL-'])
+            except NameError:
+                Sg.PopupError("Ingen datfil är vald.")
         elif event == '-FILE-':
             try:
                 file = values['-FILE-']
@@ -103,13 +106,15 @@ def main_window():
                 print("Processen tog totalt: ", elapsed_time, "s")
                 window['-COL-'].Update(values=df.columns.values.tolist())
             except FileNotFoundError:
-                Sg.PopupError("Ingen datafil är vald.")
+                pass
         elif event == '-EXPORT FILE-':
             export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
         elif event == '-SAVE PLOT AS-':
             # print(df.columns)
-            plot_to_file(values['-PLOT FILE TYPE-'], df, values['-COL-'], values['-COL-'])
-
+            try:
+                plot_to_file(values['-PLOT FILE TYPE-'], df, values['-COL-'], values['-COL-'])
+            except NameError:
+                Sg.PopupError("Välj en datafil")
     window.close()
 
 
