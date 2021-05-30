@@ -39,13 +39,69 @@ def file_to_df(_csv_file):
     return df_
 
 
+def unit_list(x):
+    if "[" in x:
+        result = x.split("[")[1].split("]")[0]
+    else:
+        result = "Na"
+    return result
+
+
+def count_units(units):
+    unit = units[0]
+    n = 1
+    for x in units[1:]:
+        if x != unit:
+            n += 1
+            unit = x
+    return n
+
+
 def my_plot(_df, data):
-    _df[data].plot()
-    plt.xticks(rotation=45)
-    plt.tight_layout()
+    units = list(map(unit_list, data))
+    n = count_units(units)
+    print(n)
+    print(n//4 + n % 4)
+    if n > 2:
+        fig, axs = plt.subplots(nrows=n//4 + n % 4, ncols=2)
+    else:
+        fig, axs = plt.figure()
+    m = [units.count(x) for x in units]
+    print(m)
+    nu = 0 #Number of units
+    n = 0 #Row
+    m = 0 #Column
+    k = 0 #Number of plots
+    u = units[0]
+    second_y = False
+    print(units)
+    for i in range(len(units)):
+        unit = units[i]
+        if u != unit:
+            if nu > 1:
+                #Start new plotaxs
+                if m == 1:
+                    n += 1
+                    m = 0
+                else:
+                    m += 1
+                #Add to total number of plots
+                k = i
+                second_y = False
+            else:
+                second_y = True
+            nu += 1
+            unit = u
+        print("n: {}, m: {}, nu: {}".format(n, m, nu))
+        print(data[i-1])
+        _df[data[i]].plot(ax=axs[n, m], secondary_y=second_y)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+
     plt.show()
 
 
+# Single axis
 def plot_to_file(filetype, _df, data, filename):
     _df[data].plot()
     plt.xticks(rotation=45)
