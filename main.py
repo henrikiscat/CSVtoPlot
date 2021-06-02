@@ -13,7 +13,10 @@ ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load
 
 # Pattern of characters allowed in file naming, used with regular expression (re)
 name_pattern = '[^a-öA-Ö0-9_]'
-global df
+df = pd.DataFrame
+rows = 0
+start = 0
+stop = 0
 
 
 # Locate first row of measurement data to be extracted
@@ -158,17 +161,21 @@ def main_window():
                               readonly=True, key='-FILE TYPE-'), Sg.Button('Ok', key='-EXPORT FILE-')]]
     window = Sg.Window("Main window", main_layout)
     while True:
+        global rows, start, stop, df
         event, values = window.read()
         if event == Sg.WINDOW_CLOSED:
             break
         elif event == "-SHOW PLOT-":
-            rows = df.shape[0]
-            start = values['-DATA WINDOW POSITION-'] * rows // 100
-            stop = start + values['-DATA WINDOW SIZE-'] * rows // 100
             try:
                 my_plot(df.iloc[int(start):int(stop), :], values['-COL-'])
-            except NameError:
-                Sg.PopupError("Ingen datfil är vald.")
+            except (NameError, TypeError) as err:
+                Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
+        elif event == "-DATA WINDOW POSITION-":
+            rows = df.shape[0]
+            start = values['-DATA WINDOW POSITION-'] * rows // 100
+        elif event == "-DATA WINDOW SIZE-":
+            rows = df.shape[0]
+            stop = start + values['-DATA WINDOW SIZE-'] * rows // 100
         elif event == '-FILE-':
             try:
                 file = values['-FILE-']
@@ -177,19 +184,22 @@ def main_window():
                 elapsed_time = time.process_time() - t
                 print("Processen tog totalt: ", elapsed_time, "s")
                 window['-COL-'].Update(values=df.columns.values.tolist())
+                rows = df.shape[0]
+                stop = start + values['-DATA WINDOW SIZE-'] * rows // 100
+                start = values['-DATA WINDOW POSITION-'] * rows // 100
             except FileNotFoundError:
                 pass
         elif event == '-EXPORT FILE-':
             try:
                 export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
-            except NameError:
-                Sg.PopupError("Välj en datafil")
+            except (NameError, TypeError) as err:
+                Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == '-SAVE PLOT AS-':
             # print(df.columns)
             try:
                 plot_to_file(values['-PLOT FILE TYPE-'], df, values['-COL-'], values['-COL-'])
-            except NameError:
-                Sg.PopupError("Välj en datafil")
+            except (NameError, TypeError) as err:
+                Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == '-ALL-':
             window['-COL-'].set_value(window['-COL-'].get_list_values())
         elif event == '-NONE-':
