@@ -58,6 +58,13 @@ def count_units(units):
 
 
 def my_plot(_df, data):
+    _df[data].plot()
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+
+def muliplot(_df, data):
     units = list(map(unit_list, data))
     n = count_units(units)
     print(n)
@@ -131,26 +138,35 @@ def export_data(filetype, _df, data, filename):
 
 def main_window():
     global df
-    right_column = [[Sg.Text("Datakolumner")], [Sg.Listbox(values=[], size=(55, 20), enable_events=True, k='-COL-',
+    right_column = []
+    main_layout = [[Sg.Text("Open CSV file"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
+                    Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
+                                  initial_folder='/home/henrik/Dokument/Intertek/Mätfiler/SBT8050/')],
+                   [Sg.Text("Datakolumner"), Sg.Button("Markera alla", k='-ALL-'), Sg.Button("Avmarkera alla",
+                                                                                                    k='-NONE-')]
+                    ,[Sg.Listbox(values=[], size=(65, 20), enable_events=True, k='-COL-',
                                                            select_mode=Sg.LISTBOX_SELECT_MODE_MULTIPLE)],
+                   [Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-DATA WINDOW SIZE-',
+                              tooltip="Välj storlek på datafönster", default_value=100),
+                    Sg.Slider(range=(0, 100), resolution=1, orientation='h', k='-DATA WINDOW POSITION-',
+                              tooltip="Välj datafönstrets position", default_value=0)],
                     [Sg.Button("Visa plot", key='-SHOW PLOT-'), Sg.Text("Spara plot som:"),
                      Sg.Combo(values=['pdf'], default_value='pdf', readonly=True, enable_events=False,
                               key='-PLOT FILE TYPE-'), Sg.Button("Ok", key='-SAVE PLOT AS-'),
                      Sg.Text("Spara data som:"),
                      Sg.Combo(values=['excel', 'text', 'html'], default_value='excel', enable_events=False,
                               readonly=True, key='-FILE TYPE-'), Sg.Button('Ok', key='-EXPORT FILE-')]]
-    main_layout = [[Sg.Text("Open CSV file"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
-                    Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
-                                  initial_folder='/home/henrik/Dokument/Intertek/Mätfiler/SBT8050/')],
-                   [Sg.Column(right_column)]]
     window = Sg.Window("Main window", main_layout)
     while True:
         event, values = window.read()
         if event == Sg.WINDOW_CLOSED:
             break
         elif event == "-SHOW PLOT-":
+            rows = df.shape[0]
+            start = values['-DATA WINDOW POSITION-'] * rows // 100
+            stop = start + values['-DATA WINDOW SIZE-'] * rows // 100
             try:
-                my_plot(df, values['-COL-'])
+                my_plot(df.iloc[int(start):int(stop), :], values['-COL-'])
             except NameError:
                 Sg.PopupError("Ingen datfil är vald.")
         elif event == '-FILE-':
@@ -174,6 +190,10 @@ def main_window():
                 plot_to_file(values['-PLOT FILE TYPE-'], df, values['-COL-'], values['-COL-'])
             except NameError:
                 Sg.PopupError("Välj en datafil")
+        elif event == '-ALL-':
+            window['-COL-'].set_value(window['-COL-'].get_list_values())
+        elif event == '-NONE-':
+            window['-COL-'].set_value('[]')
     window.close()
 
 
