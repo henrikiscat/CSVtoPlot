@@ -7,36 +7,89 @@ import pandas as pd
 import PySimpleGUI as Sg
 import time
 import re
+import xlsxwriter
 
 ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load On time', 'Step Time (Seconds)']
-from tabulate import tabulate
+#from tabulate import tabulate
 
 # Pattern of characters allowed in file naming, used with regular expression (re)
 name_pattern = '[^a-öA-Ö0-9_]'
-global df
+df_data = pd.DataFrame
+df_start = pd.DataFrame
+df_comment = pd.DataFrame
+start = stop = pos = size = rows = 0
 
 
 # Locate first row of measurement data to be extracted
-def find_header(file):
-    r_ = 0
+def find_rows(file):
+    row_index = 0
+    sections = {'indices'
+                : [], 'index': ''}
     with open(file, 'r') as cf:
         while True:
-            r_ += 1
             line = cf.readline()
-            if line.startswith("Test,"):
+            if row_index == 0:
+                prev_size = len(line.split(','))
+            if line.startswith("#"):
+                True
+            elif ',' not in line:
+                print('Does not contain ,: {}'.format(line))
+            elif line.startswith("Test,"):
+                print('Data row: {}'.format(line))
+                sections['indices'].append(row_index)
                 for x in line.split(','):
-                    if x.__contains__('Total Time'):
-                        index_ = x
-                        break
-                return r_, index_
+                    if 'Total Time' in x:
+                        sections['index'] = x
+                        print(sections)
+                        return sections
+            elif len(line.split(',')) != prev_size:
+                sections['indices'].append(row_index)
+                prev_size = len(line.split(','))
+                print('New section: {}'.format(line))
+            row_index += 1
 
+
+# POSITION CONTEXT LOG
+# END POSITION CONTEXT LOG
 
 # Read CVS-file into DataFrame df
 def file_to_df(_csv_file):
-    r, index = find_header(_csv_file)
-    df_ = pd.read_csv(_csv_file, skiprows=r - 1, index_col=index, usecols=lambda x: x not in ignored_columns)
-    df_.rename(columns=lambda x: re.sub("\(", "[", re.sub("\)", "]", x)), inplace=True)
-    return df_
+    global df_data, df_start, df_comment
+    sections = find_rows(_csv_file)
+    print(sections)
+    if len(sections['indices']) > 1:
+        df_start = pd.read_csv(_csv_file, skiprows=lambda x: x >= (sections['indices'][0]), squeeze=True, header=None)
+        df_comment = pd.read_csv(_csv_file, skiprows=(lambda x: x in range(0, sections['indices'][0])
+                                                                or x >= sections['indices'][1]),
+                                 header=None)
+        print("df_comment: {}".format(df_comment))
+        print("df_start: {}".format(df_start.values))
+    else:
+        print("TRUE")
+        df_start = pd.read_csv(_csv_file, nrows=sections['indices'][0], squeeze=True, header=None)
+        print("df_start: {}".format(df_start))
+    df_data = pd.read_csv(_csv_file, skiprows=(sections['indices'][-1]), index_col=sections['index'],
+                          usecols=lambda x: x not in ignored_columns)
+    df_data.rename(columns=lambda x: re.sub("\(", "[", re.sub("\)", "]", x)), inplace=True)
+    return df_data, df_start, df_comment
+
+
+def unit_list(x):
+    if "[" in x:
+        result = x.split("[")[1].split("]")[0]
+    else:
+        result = "Na"
+    return result
+
+
+def count_units(units):
+    unit = units[0]
+    n = 1
+    for x in units[1:]:
+        if x != unit:
+            n += 1
+            unit = x
+    return n
 
 
 def my_plot(_df, data):
@@ -46,6 +99,51 @@ def my_plot(_df, data):
     plt.show()
 
 
+def muliplot(_df, data):
+    units = list(map(unit_list, data))
+    n = count_units(units)
+    print(n)
+    print(n//4 + n % 4)
+    if n > 2:
+        fig, axs = plt.subplots(nrows=n//4 + n % 4, ncols=2)
+    else:
+        fig, axs = plt.figure()
+    m = [units.count(x) for x in units]
+    print(m)
+    nu = 0 #Number of units
+    n = 0 #Row
+    m = 0 #Column
+    k = 0 #Number of plots
+    u = units[0]
+    second_y = False
+    print(units)
+    for i in range(len(units)):
+        unit = units[i]
+        if u != unit:
+            if nu > 1:
+                #Start new plotaxs
+                if m == 1:
+                    n += 1
+                    m = 0
+                else:
+                    m += 1
+                #Add to total number of plots
+                k = i
+                second_y = False
+            else:
+                second_y = True
+            nu += 1
+            unit = u
+        print("n: {}, m: {}, nu: {}".format(n, m, nu))
+        print(data[i-1])
+        _df[data[i]].plot(ax=axs[n, m], secondary_y=second_y)
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+
+    plt.show()
+
+
+# Single axis
 def plot_to_file(filetype, _df, data, filename):
     _df[data].plot()
     plt.xticks(rotation=45)
@@ -55,12 +153,29 @@ def plot_to_file(filetype, _df, data, filename):
 
 
 def export_data(filetype, _df, data, filename):
+    start_row = 4
     tic = time.process_time()
     if filetype == "excel":
         filename = filename + '.xlsx'
-        _df[data].to_excel(filename)
+        writer = pd.ExcelWriter(filename, engine='xlsxwriter') #, options={'constant_memory': True})
+        _df[data].to_excel(writer, sheet_name='Sheet1', startcol=0, startrow=start_row + 1, header=False)
+
+        workbook = writer.book
+        worksheet = writer.sheets['Sheet1']
+
+        header_format = workbook.add_format({'bold': True, 'text_wrap':True, 'valign': 'top', 'fg_color': '#D7E4BV', 'border': 0})
+        worksheet.set_column(0, 0, len(_df[data].index.name))
+        j = 1
+        for i in _df[data].columns:
+            worksheet.write(start_row, j, i, header_format)
+            worksheet.set_column(j, j, len(i)+1)
+
+            j += 1
+        writer.save()
+
+
     elif filetype == "text":
-        filename = filename + '.txt'
+        filename = filename + '.txt',
         string_ = _df[data].to_string()
         with open(filename, 'w') as f:
             f.write(string_)
@@ -74,40 +189,84 @@ def export_data(filetype, _df, data, filename):
 
 
 def main_window():
-    global df
-    right_column = [[Sg.Text("Datakolumner")], [Sg.Listbox(values=[], size=(55, 20), enable_events=True, k='-COL-',
+    global df_data
+    right_column = [[], [], [Sg.Table(values=[['                ' for row in range(2)] for col in range(10)], k='-DESCRIPTION-', col_widths=[20, 20])]] #[Sg.Multiline( k="-DESCRIPTION-", size=(60, 20), enable_events=False, justification='left')]]
+    left_column = [[Sg.Text("Datakolumner"), Sg.Button("Markera alla", k='-ALL-'), Sg.Button("Avmarkera alla",
+                                                                                                    k='-NONE-')],
+                   [Sg.Listbox(values=[], size=(45, 20), enable_events=True, k='-COL-',
                                                            select_mode=Sg.LISTBOX_SELECT_MODE_MULTIPLE)],
+                   [Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-DATA WINDOW SIZE-',
+                              tooltip="Välj storlek på datafönster", default_value=100, enable_events=True),
+                    Sg.Slider(range=(0, 100), resolution=1, orientation='h', k='-DATA WINDOW POSITION-',
+                              tooltip="Välj datafönstrets position", default_value=50, enable_events=True)]]
+    main_layout = [[Sg.Text("Open CSV file"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
+                    Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
+                                  initial_folder='/home/henrik/Dokument/SBT8050 modultestning med AIOS box-TypK-CAN')]
+                    , [Sg.Column(layout=left_column), Sg.Column(layout=right_column)],
                     [Sg.Button("Visa plot", key='-SHOW PLOT-'), Sg.Text("Spara plot som:"),
                      Sg.Combo(values=['pdf'], default_value='pdf', readonly=True, enable_events=False,
                               key='-PLOT FILE TYPE-'), Sg.Button("Ok", key='-SAVE PLOT AS-'),
                      Sg.Text("Spara data som:"),
                      Sg.Combo(values=['excel', 'text', 'html'], default_value='excel', enable_events=False,
                               readonly=True, key='-FILE TYPE-'), Sg.Button('Ok', key='-EXPORT FILE-')]]
-    main_layout = [[Sg.Text("Open CSV file"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
-                    Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
-                                  initial_folder='/home/henrik/Dokument/Intertek/Mätfiler/SBT8050/')],
-                   [Sg.Column(right_column)]]
     window = Sg.Window("Main window", main_layout)
     while True:
+        global rows, pos, df_data, size, start, stop
         event, values = window.read()
         if event == Sg.WINDOW_CLOSED:
             break
         elif event == "-SHOW PLOT-":
-            my_plot(df, values['-COL-'])
+            try:
+                my_plot(df_data.iloc[start:stop, :], values['-COL-'])
+            except (NameError, TypeError) as err:
+                Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
+        elif event == "-DATA WINDOW POSITION-":
+            rows = df_data.shape[0]
+            pos = round(values['-DATA WINDOW POSITION-'] * rows // 100)
+            start = (lambda x: 0 if x < 0 else x )(int(pos - size/2))
+            stop = (lambda x: rows if x > rows else x)(int(pos + size/2))
+        elif event == "-DATA WINDOW SIZE-":
+            rows = df_data.shape[0]
+            size = round(values['-DATA WINDOW SIZE-'] * rows // 100)
+            start = (lambda x: 0 if x < 0 else x)(int(pos - size/2))
+            stop = (lambda x: rows if x > rows else x)(int(pos + size/2))
         elif event == '-FILE-':
-            file = values['-FILE-']
-            print(file)
-            t = time.process_time()
-            df = file_to_df(file)
-            elapsed_time = time.process_time() - t
-            print("Processen tog totalt: ", elapsed_time, "s")
-            window['-COL-'].Update(values=df.columns.values.tolist())
+            try:
+                file = values['-FILE-']
+                t = time.process_time()
+                df_data, df_start, df_comment = file_to_df(file)
+                #left_aligned_start = df_start.style.set_properties(**{'text-align': 'left'})
+                elapsed_time = time.process_time() - t
+                #print("Processen tog totalt: ", elapsed_time, "s")
+                window['-COL-'].Update(values=df_data.columns.values.tolist())
+                #print("to_string: {}, columns {}".format(df_start.to_string(), df_start.columns))
+                #print((lambda x: "{}\n".format(x))(df_start))
+                #print("Nycklar: {}".format(df_start.values))
+                window['-DESCRIPTION-'].Update(values=df_start)
+                #print("df_start: {}".format(df_start.values.to_list()))
+                rows = df_data.shape[0]
+                size = round(values['-DATA WINDOW SIZE-'] * rows // 100)
+                pos = round(values['-DATA WINDOW POSITION-'] * rows // 100)
+                start = (lambda x: 0 if x < 0 else x)(int(pos - size/2))
+                stop = (lambda x: rows if x > rows else x)(int(pos + size/2))
+                print("Start: {}, Stop: {}".format(start, stop))
+            except FileNotFoundError:
+                pass
         elif event == '-EXPORT FILE-':
-            export_data(values['-FILE TYPE-'], df, values['-COL-'], 'testfil')
+            try:
+                export_data(values['-FILE TYPE-'], df_data.iloc[start:stop, :], values['-COL-'], 'testfil')
+            except (NameError, TypeError) as err:
+                Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == '-SAVE PLOT AS-':
             # print(df.columns)
-            plot_to_file(values['-PLOT FILE TYPE-'], df, values['-COL-'], values['-COL-'])
-
+            try:
+                plot_to_file(values['-PLOT FILE TYPE-'], df_data.iloc[start:stop, :], values['-COL-'], values['-COL-'])
+            except (NameError, TypeError) as err:
+                Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
+        elif event == '-ALL-':
+            window['-COL-'].set_value(window['-COL-'].get_list_values())
+        elif event == '-NONE-':
+            window['-COL-'].set_value('[]')
     window.close()
 
 
