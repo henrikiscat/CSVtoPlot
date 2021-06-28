@@ -148,9 +148,21 @@ def multiplot(_df, data, style_, save, filetype):
     plot_left_adjust = 0.1
     plot_right_adjust = 0.90
     if total_nu <= 2:
-        _df[data].plot(subplots=True, figsize=(15, 8), style=style_)
+        left_unit = re.sub(']', '', data[0].split('[')[-1])
+        right_unit = re.sub(']', '', data[-1].split('[')[-1])
+        right_data = [x for x in data if left_unit not in x]
+        ax = _df[data].plot(figsize=(15, 8), style=style_, secondary_y=right_data, grid=True, legend=False)
         plt.subplots_adjust(left=plot_left_adjust, right=plot_right_adjust)
-        plt.legend(bbox_to_anchor=(1.0, 1.0))
+        ax.set_ylabel(left_unit)
+        lines1, labels1 = ax.get_legend_handles_labels()
+        if hasattr(ax, 'right_ax'):
+            ax.right_ax.set_ylabel(right_unit)
+            lines2, labels2 = ax.right_ax.get_legend_handles_labels()
+            ax.right_ax.set_ylabel(right_unit)
+            ax.right_ax.legend(lines1 + lines2, labels1 + labels2)
+            ax.right_ax.grid(True)
+        else:
+            ax.legend(lines1, labels1)
         plt.xticks(rotation=45)
         plt.tight_layout()
     else:
@@ -161,14 +173,14 @@ def multiplot(_df, data, style_, save, filetype):
             data_slice = data[slice_list[j]]
             left_unit = re.sub(']', '', data_slice[0].split('[')[-1])
             right_unit = re.sub(']', '', data_slice[-1].split('[')[-1])
-            #print(right_unit)
             right_data = [x for x in data_slice if left_unit not in x]
-            _df[data[slice_list[j]]].plot(ax=ax_, secondary_y=right_data, legend=False)
+            _df[data[slice_list[j]]].plot(ax=ax_, secondary_y=right_data, legend=False, grid=True, marker=style_)
             lines1, labels1 = ax_.get_legend_handles_labels()
             if hasattr(ax_, 'right_ax'):
                 lines2, labels2 = ax_.right_ax.get_legend_handles_labels()
                 ax_.right_ax.set_ylabel(right_unit)
                 ax_.right_ax.legend(lines1 + lines2, labels1 + labels2)
+                ax_.right_ax.grid(True)
             else:
                 lines, labels = ax_.get_legend_handles_labels()
                 ax_.legend(lines, labels)
@@ -264,7 +276,7 @@ def main_window():
                     ],
                    [Sg.Column(layout=left_column), Sg.Column(layout=right_column)],
                    [Sg.Checkbox("Rad för rad", k='-ROW BY ROW-'), Sg.Button("Visa plot", key='-SHOW PLOT-'),
-                    Sg.Combo(values=['-', '.-', '.'], default_value='-', k='-PLOT STYLE-'),
+                    Sg.Combo(values=["-", ".-", "."], default_value="-", k='-PLOT STYLE-'),
                     Sg.Text("Spara plot som:"),
                     Sg.Combo(values=['pdf'], default_value='pdf', readonly=True, enable_events=False,
                              key='-PLOT FILE TYPE-'), Sg.Button("Ok", key='-SAVE PLOT AS-'),
@@ -322,7 +334,6 @@ def main_window():
                 Sg.popup_error('Ingen arbetskatalog är vald.')
             else:
                 try:
-                    #if values['-ROW BY ROW-']:
                     multiplot(values['-PLOT FILE TYPE-'], df_data.iloc[start:stop, :],
                     values['-COL-'], values['-COL-'], True, values['-PLOT FILE TYPE'])
                 except (NameError, TypeError) as err:
@@ -341,11 +352,6 @@ def main_window():
         # elif event == '-CYCLES-':
         #    window['-PROCENT-'].Update(disabled=False)
     window.close()
-
-
-# window_ = busy_window(1000)
-# events, values = window_.read()
-# window_.close()
 
 
 main_window()
