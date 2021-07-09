@@ -1,5 +1,8 @@
 import pandas as pd
 import re
+import time
+
+import pandas.errors
 
 ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load On time', 'Step Time (Seconds)']
 
@@ -20,12 +23,16 @@ reason_codes = {1: 'DeltaV', 2: 'DeltaT', 3: 'EndEvent', 4: 'NewEvent', 5: 'Delt
 
 
 def find_rows(file):
+    timeout = 3
+    start_timer = time.time()
     row_index = 0
     start = row_index
     sections = {'indices'
                 : [], 'index': ''}
     with open(file, 'r') as cf:
         while True:
+            if time.time() - start_timer >= timeout:
+                raise TimeoutError
             line = cf.readline()
             line_length = len(line.split(','))
             if row_index == 0:
@@ -57,13 +64,20 @@ def rename(col_name):
 
 
 def file_to_df(_csv_file, window):
-    sections, header_row = find_rows(_csv_file)
-    data = []
-    for index_range in sections['indices']:
-        data.append(pd.read_csv(_csv_file, skiprows=lambda x: x not in index_range, comment='#', squeeze=True,
-                                header=None))
-    print("Header row: {}".format(header_row))
-    df_data = pd.read_csv(_csv_file, skiprows=header_row, index_col=sections['index'])
-    df_data.columns = [rename(x) for x in df_data.columns]
-    df_data.index.name = rename(df_data.index.name)
-    window.write_event_value('-FILE TO DF-', [data, df_data])
+    try:
+        sections, header_row = find_rows(_csv_file)
+
+        data = []
+        for index_range in sections['indices']:
+            data.append(pd.read_csv(_csv_file, skiprows=lambda x: x not in index_range, comment='#', squeeze=True,
+                                    header=None))
+        print("Header row: {}".format(header_row))
+        df_data = pd.read_csv(_csv_file, skiprows=header_row, index_col=sections['index'])
+        df_data.columns = [rename(x) for x in df_data.columns]
+        df_data.index.name = rename(df_data.index.name)
+        window.write_event_value('-FILE TO DF-', [data, df_data])
+    except TimeoutError:
+        window.write_event_value('-FILE TO DF EXCEPTION-',
+                                 "Filindexeringen tog för lång tid, filen är förmodligen felformaterad")
+    except pandas.errors.EmptyDataError as e:
+        window.write_event_value('-FILE TO DF EXCEPTION-', "Data saknas: {}".format(e))

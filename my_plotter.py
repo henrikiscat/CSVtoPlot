@@ -43,7 +43,7 @@ def count_units(units):
 def multiplot(_df, data, style_, save, filetype, grid_on, figsize_, work_folder, df_start, window, interpolate):
     plt.close()
     if interpolate:
-        _df[data] = _df[data].interpolate()
+        _df = _df.interpolate()
     units = list(map(unit_list, data))  # List of data units
     slice_list = slice_it(units)  # Data slices with two units each
     total_nu = count_units(units)  # Total number of unique units in data
@@ -58,7 +58,6 @@ def multiplot(_df, data, style_, save, filetype, grid_on, figsize_, work_folder,
             right_unit = re.sub(']', '', data[-1].split('[')[-1])
             right_data = [x for x in data if left_unit not in x]
             ax = _df[data].plot(figsize=figsize_, secondary_y=right_data, legend=False, style=style_)
-
             ax.set_ylabel(left_unit)
             lines1, labels1 = ax.get_legend_handles_labels()
             if hasattr(ax, 'right_ax'):

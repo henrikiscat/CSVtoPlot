@@ -53,15 +53,11 @@ def create_layout():
                               tooltip='Välj cykel-fönstrets position')]]
     right_column = [[Sg.Table(values=[[' ', ' ']], headings=['Variabel', 'Värde'], k='-DESCRIPTION-',
                               col_widths=[20, 22], justification='left', auto_size_columns=False,
-                              size=(50, 17), alternating_row_color='dark grey')], [Sg.Table(values=[[' ', ' ', ' ']],
-                                                                                            headings=['Variabel',
-                                                                                                      'Värde', 'Enhet'],
-                                                                                            k='-UPDATE DETAILS-',
-                                                                                            col_widths=[20, 17, 5],
-                                                                                            justification='left',
-                                                                                            auto_size_columns=False,
-                                                                                            size=(50, 17),
-                                                                                            alternating_row_color='dark grey')]]
+                              background_color="white", text_color="black",
+                              size=(50, 17), alternating_row_color='light grey')],
+                    [Sg.Table(values=[[' ', ' ', ' ']], headings=['Variabel', 'Värde', 'Enhet'], k='-UPDATE DETAILS-',
+                              col_widths=[20, 17, 5], justification='left', auto_size_columns=False, size=(50, 17),
+                              alternating_row_color='light grey', background_color="white", text_color="black")]]
     main_layout = [[Sg.Text("Öppna CSV-fil"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
                     Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
                                   initial_folder='/home/henrik/Dokument/SBT8050 modultestning med AIOS box-TypK-CAN'),
@@ -90,14 +86,10 @@ def main_window():
         if event == Sg.WINDOW_CLOSED:
             break
         elif event == "-SHOW PLOT-":
+            window.set_cursor("watch")
             try:
-                window.set_cursor("watch")
-                threading.Thread(target=multiplot,
-                                 args=(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], False, '',
-                                       values['-GRID-'], (15, 8), work_folder, data[0], window, True, )).start()
-                # multiplot(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], False, '',
-                #   values['-GRID-'], (15, 8), work_folder, data[0])
-                #window.set_cursor("arrow")
+                multiplot(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], False, '',
+                          values['-GRID-'], (15, 8), work_folder, data[0], window, True)
             except (NameError, TypeError) as err:
                 Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == "-DATA WINDOW POSITION-":
@@ -113,7 +105,6 @@ def main_window():
         elif event == '-FILE-':
             try:
                 file = values['-FILE-']
-                stop_busy = False
                 window.set_cursor("watch")
                 threading.Thread(target=file_to_df, args=(file, window), daemon=True).start()
             except FileNotFoundError:
@@ -126,19 +117,19 @@ def main_window():
                                                            values['-COL-'], (work_folder + '/' + 'testfil'), data[0],
                                                            pd, intertek_color,), daemon=True).start()
                 window.set_cursor("watch")
+        elif event == '-EXPORT EXCEPTION-':
+            window.set_cursor('arrow')
+            Sg.PopupError(values['-EXPORT EXCEPTION-'])
         elif event == '-SAVE PLOT AS-':
             if work_folder == '':
                 Sg.popup_error('Ingen arbetskatalog är vald.')
             else:
                 try:
                     window.set_cursor("watch")
-                    threading.Thread(target=multiplot, args=(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], True,
-                              values['-PLOT FILE TYPE-'],
-                              values['-GRID-'], (15, 8), work_folder, data[0], window, True, )).start()
-                   # multiplot(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], True,
-                    #          values['-PLOT FILE TYPE-'],
-                     #         values['-GRID-'], (15, 8), work_folder, data[0])
-                   # window.set_cursor("watch")
+                    threading.Thread(target=multiplot,
+                                     args=(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], True,
+                                           values['-PLOT FILE TYPE-'],
+                                           values['-GRID-'], (15, 8), work_folder, data[0], window, True,)).start()
                 except (NameError, TypeError) as err:
                     Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == '-ALL-':
@@ -156,6 +147,8 @@ def main_window():
             window.set_cursor("arrow")
             value = values['-FILE TO DF-']
             data = value[0]
+            for item in data:
+                print(item)
             df_data = value[1]
             window['-COL-'].Update(values=df_data.columns.tolist())
             window['-DESCRIPTION-'].Update(values=data[0].values.tolist())
@@ -163,12 +156,15 @@ def main_window():
             window['-CYCLE WINDOW SIZE-'].Update(range=(0, max_cycle))
             window['-CYCLE WINDOW POSITION-'].Update(range=(values['-CYCLE WINDOW SIZE-'], max_cycle))
             if len(data) > 1:
-                window['-UPDATE DETAILS-'].Update(values=data[2].values.tolist())
+                window['-UPDATE DETAILS-'].Update(values=data[-1].values.tolist())
             rows = df_data.shape[0]
             size = round(values['-DATA WINDOW SIZE-'] * rows // 100)
             pos = round(values['-DATA WINDOW POSITION-'] * rows // 100)
             start = (lambda x: 0 if x < 0 else x)(int(pos - size / 2))
             stop = (lambda x: rows if x > rows else x)(int(pos + size / 2))
+        elif event == '-FILE TO DF EXCEPTION-':
+            window.set_cursor('arrow')
+            Sg.PopupError(values['-FILE TO DF EXCEPTION-'])
         elif event == '-SAVE PLOT DONE-':
             window.set_cursor("arrow")
             Sg.PopupAutoClose(values['-SAVE PLOT DONE-'], auto_close_duration=3)
