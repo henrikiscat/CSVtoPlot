@@ -6,6 +6,8 @@ import pandas.errors
 
 ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load On time', 'Step Time (Seconds)']
 
+ignored_reasoncodes = [1, 2, 5, 30]
+
 reason_codes = {1: 'DeltaV', 2: 'DeltaT', 3: 'EndEvent', 4: 'NewEvent', 5: 'Deltatal', 6: 'VEnd', 7: 'TEnd', 8: 'MEnd',
                 9: 'DMAEnd', 10: 'IEnd', 11: 'VMax', 12: 'VMin', 13: 'VCharge', 14: 'AHCharge', 15: 'AHDisChg',
                 16: 'Pause', 17: 'MaxPower', 18: 'PIError', 19: 'TPowerMOSFET', 20: 'TShunt50A', 21: 'TShunt5A',
@@ -27,19 +29,22 @@ def find_rows(file):
     start_timer = time.time()
     row_index = 0
     start = row_index
+    position_context = False
     sections = {'indices'
-                : [], 'index': ''}
+                : [], 'index': '', 'context_log': []}
     with open(file, 'r') as cf:
         while True:
             if time.time() - start_timer >= timeout:
                 raise TimeoutError
             line = cf.readline()
+            if "CONTEXT" in line:
+                if "END" not in line:
+                    position_context = True
+                else:
+                    position_context = False
             line_length = len(line.split(','))
             if row_index == 0:
                 prev_length = line_length
-            if line == '\n':
-                print("Found empty line! #{}".format(row_index))
-                pass
             elif line_length != prev_length:
                 if ',' in line:
                     if line_length > 17:
@@ -49,13 +54,14 @@ def find_rows(file):
                             if 'Total Time' in x:
                                 sections['index'] = x
                                 print("Found last section, Row: {}, Content: {}".format(row_index, line))
+                                sections['context_log'].append(position_context)
                                 return sections, row_index
-                    print("New section found! Last row: {}, Content: {}".format(row_index, line))
+                    print("New section found! Last row: {}, Content: {}, Is Context: {}".format(row_index, line, position_context))
                     sections['indices'].append(range(start, row_index - 1))
+                    sections['context_log'].append(position_context)
                     start = row_index
                     prev_length = line_length
-                else:
-                    pass
+
             row_index += 1
 
 
@@ -68,13 +74,16 @@ def file_to_df(_csv_file, window):
         sections, header_row = find_rows(_csv_file)
 
         data = []
-        for index_range in sections['indices']:
-            data.append(pd.read_csv(_csv_file, skiprows=lambda x: x not in index_range, comment='#', squeeze=True,
+        for i in range(len(sections['indices'])):
+            print("Index range: {}".format(sections['indices'][i]))
+            data.append(pd.read_csv(_csv_file, skiprows=lambda x: x not in sections['indices'][i], comment='#',
+                                    squeeze=True,
                                     header=None))
         print("Header row: {}".format(header_row))
         df_data = pd.read_csv(_csv_file, skiprows=header_row, index_col=sections['index'])
         df_data.columns = [rename(x) for x in df_data.columns]
         df_data.index.name = rename(df_data.index.name)
+        df_data['ReasonCode Name'] = [reason_codes[x] for x in df_data['ReasonCode'].values.tolist()]
         window.write_event_value('-FILE TO DF-', [data, df_data])
     except TimeoutError:
         window.write_event_value('-FILE TO DF EXCEPTION-',

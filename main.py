@@ -47,10 +47,10 @@ def create_layout():
                               tooltip="Välj storlek på datafönster", default_value=100, enable_events=True),
                     Sg.Slider(range=(0, 100), resolution=1, orientation='h', k='-DATA WINDOW POSITION-',
                               tooltip="Välj datafönstrets position", default_value=50, enable_events=True)],
-                   [Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-CYCLE WINDOW SIZE-',
-                              tooltip='Välj storlek på cykel-fönster', default_value=100),
-                    Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-CYCLE WINDOW POSITION-',
-                              tooltip='Välj cykel-fönstrets position')]]
+                   [Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-CYCLE MIN-',
+                              tooltip='Välj undre cykelgräns', default_value=0, enable_events=True),
+                    Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-CYCLE MAX-',
+                              tooltip='Välj övre cykelgräns', enable_events=True)]]
     right_column = [[Sg.Table(values=[[' ', ' ']], headings=['Variabel', 'Värde'], k='-DESCRIPTION-',
                               col_widths=[20, 22], justification='left', auto_size_columns=False,
                               background_color="white", text_color="black",
@@ -73,12 +73,14 @@ def create_layout():
                              key='-PLOT FILE TYPE-'), Sg.Button("Ok", key='-SAVE PLOT AS-'),
                     Sg.Text("Spara data som:"),
                     Sg.Combo(values=['excel', 'text', 'html'], default_value='excel', enable_events=False,
-                             readonly=True, key='-FILE TYPE-'), Sg.Button('Ok', key='-EXPORT FILE-')]]
+                             readonly=True, key='-FILE TYPE-'),
+                    Sg.Checkbox("Resultat från föregående fil", key="-ACCUMULATE-"),
+                    Sg.Button('Ok', key='-EXPORT FILE-')]]
     return main_layout
 
 
 def main_window():
-    global df_data, busy_id
+    global df_data, busy_id, cyclemin, cyclemax, cyclesetmax, cyclesetmin
     window = Sg.Window("Main window", create_layout())
     while True:
         global rows, pos, df_data, size, start, stop, work_folder, df_context, stop_busy
@@ -88,9 +90,12 @@ def main_window():
         elif event == "-SHOW PLOT-":
             window.set_cursor("watch")
             try:
-                multiplot(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], False, '',
+                #df_data.iloc[start:stop, :]
+                print(df_data[(df_data['Cycle'] > cyclesetmin) & (df_data['Cycle'] < cyclesetmax)])
+                multiplot(df_data[(df_data['Cycle'] > cyclesetmin) & (df_data['Cycle'] < cyclesetmax)], values['-COL-'], values['-PLOT STYLE-'], False, '',
                           values['-GRID-'], (15, 8), work_folder, data[0], window, True)
-            except (NameError, TypeError) as err:
+            except (NameError, TypeError, IndexError) as err:
+                window.set_cursor("arrow")
                 Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == "-DATA WINDOW POSITION-":
             rows = df_data.shape[0]
@@ -113,9 +118,14 @@ def main_window():
             if work_folder == '':
                 Sg.popup_error('Ingen arbetskatalog vald.')
             else:
+
+                accumulated_file = Sg.PopupGetFile("Välj fil att akumulera data från",
+                                                   file_types=(('ALL Files', '*.xlsx'),)) if values["-ACCUMULATE-"] \
+                    else None
+                print("Accumulated file: {}".format(accumulated_file))
                 threading.Thread(target=export_data, args=(window, values['-FILE TYPE-'], df_data.iloc[start:stop, :],
-                                                           values['-COL-'], (work_folder + '/' + 'testfil'), data[0],
-                                                           pd, intertek_color,), daemon=True).start()
+                                                           values['-COL-'], (work_folder + '/' + 'testfil'), data,
+                                                           pd, intertek_color, accumulated_file,), daemon=True).start()
                 window.set_cursor("watch")
         elif event == '-EXPORT EXCEPTION-':
             window.set_cursor('arrow')
@@ -144,17 +154,21 @@ def main_window():
         elif event == '-WORK FOLDER-':
             work_folder = values['-WORK FOLDER-']
         elif event == '-FILE TO DF-':
+            # Filen har importerats som Pandas Data Frame
             window.set_cursor("arrow")
             value = values['-FILE TO DF-']
             data = value[0]
-            for item in data:
-                print(item)
             df_data = value[1]
+            cyclemax = cyclesetmax = df_data['Cycle'].max()
+            cyclemin = cyclesetmin = df_data['Cycle'].min()
+
+            df_data["Power [W]"] = df_data["Voltage [mV]"] * df_data["Current [mA]"] / 1000000
             window['-COL-'].Update(values=df_data.columns.tolist())
             window['-DESCRIPTION-'].Update(values=data[0].values.tolist())
-            max_cycle = max(df_data['Cycle'])
-            window['-CYCLE WINDOW SIZE-'].Update(range=(0, max_cycle))
-            window['-CYCLE WINDOW POSITION-'].Update(range=(values['-CYCLE WINDOW SIZE-'], max_cycle))
+            window['-CYCLE MAX-'].Update(range=(cyclemin, cyclemax))
+            window['-CYCLE MAX-'].Update(value=cyclemax)
+            window['-CYCLE MIN-'].Update(range=(cyclemin, cyclemax), value=cyclemin)
+            #window['-CYCLE WINDOW POSITION-'].Update(range=(values['-CYCLE WINDOW SIZE-'], max_cycle))
             if len(data) > 1:
                 window['-UPDATE DETAILS-'].Update(values=data[-1].values.tolist())
             rows = df_data.shape[0]
@@ -170,6 +184,14 @@ def main_window():
             Sg.PopupAutoClose(values['-SAVE PLOT DONE-'], auto_close_duration=3)
         elif event == '-PLOT DONE-':
             window.set_cursor("arrow")
+        elif event == '-CYCLE MIN-':
+            pass
+        elif event == '-CYCLE MAX-':
+            cyclesetmax = round(values['-CYCLE MAX-'])
+            cyclesetmin = round(values['-CYCLE MIN-'])
+            window['-CYCLE MIN-'].Update(range=(cyclemin, cyclesetmax))
+            if cyclesetmax < cyclesetmin:
+                window['-CYCLE MIN-'].Update(value=cyclesetmax)
     window.close()
 
 
