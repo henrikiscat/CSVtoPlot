@@ -41,12 +41,9 @@ def export_data(window, filetype, df_data_, data, filename, df_data, pd, color, 
                     else:
                         accumulated_cyclenr = x
                     print(accumulated_cyclenr)
-                    #print("data_: {}".format(data_))
                     df_data_cyclecont = df_data_.copy()
                     df_data_cyclecont.loc[:, 'Cycle'] = df_data_['Cycle'] + accumulated_cyclenr + 1
                     df_data_ = df_data_cyclecont
-                    #print(data_['Cycle'])
-
                     accumulated.to_excel(writer, sheet_name="Accumulated", index=None, header=True)
                 except Exception as e:
                     print(
@@ -107,12 +104,12 @@ def export_data(window, filetype, df_data_, data, filename, df_data, pd, color, 
             return
     elif filetype == "text":
         filename = filename + '.txt'
-        string_ = data_.to_string()
+        string_ = df_data_[data].to_string()
         with open(filename, 'w') as f:
             f.write(string_)
     elif filetype == 'html':
         filename = filename + '.html'
-        html = data_.to_html()
+        html = df_data_[data].to_html()
         with open(filename, 'w') as f:
             f.write(html)
     toc = time.process_time()
