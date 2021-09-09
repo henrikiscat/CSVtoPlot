@@ -65,12 +65,12 @@ def create_layout():
                     [Sg.Table(values=[[' ', ' ', ' ']], headings=['Variabel', 'Värde', 'Enhet'], k='-UPDATE DETAILS-',
                               col_widths=[20, 17, 5], justification='left', auto_size_columns=False, size=(50, 17),
                               alternating_row_color='light grey', background_color="white", text_color="black")]]
-    main_layout = [[Sg.Text("Öppna CSV-fil    ",), Sg.Input(key='-FILE-', visible=False, enable_events=True),
+    main_layout = [[Sg.Text("Öppna CSV-fil    ", ), Sg.Input(key='-FILE-', visible=False, enable_events=True),
                     Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
                                   ),
                     Sg.Text("Arbetskatalog"), Sg.Input(key='-WORK FOLDER-', visible=True, enable_events=True),
                     Sg.FolderBrowse(
-                        )
+                    )
                     ], [Sg.Text("Öppna Maccor-fil"), Sg.Input(key='-MACCOR FILE-', visible=False, enable_events=True),
                         Sg.FileBrowse(file_types=(('ALL Files', '*'),),
                                       )],
@@ -108,8 +108,8 @@ def main_window():
                     test_info_dict = test_info.to_dict()
                     title = "Test ID: {}, {}, {}".format(test_info_dict['Test:'], test_info_dict['Test Description:'],
                                                          test_info_dict['TestRegime Suffix:'])
-                    data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
-                    test_info_ = test_info #data[0]
+                    test_info_ = test_info  # data[0]
+                data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
                 multiplot(data,
                           values['-COL-'], values['-PLOT STYLE-'], False, '',
                           values['-GRID-'], (17, 9), work_folder, test_info_, window, True, title, test_info)
@@ -141,8 +141,8 @@ def main_window():
         elif event == '-MACCOR FILE-':
             window.set_cursor("watch")
             threading.Thread(target=maccor_to_df, args=(values['-MACCOR FILE-'], window)).start()
-            #df_data = maccor_to_df(values['-MACCOR FILE-'])
-            #window['-COL-'].Update(values=df_data.columns.tolist())
+            # df_data = maccor_to_df(values['-MACCOR FILE-'])
+            # window['-COL-'].Update(values=df_data.columns.tolist())
 
         elif event == '-EXPORT FILE-':
             if work_folder == '':
@@ -167,13 +167,20 @@ def main_window():
             else:
                 try:
                     window.set_cursor("watch")
-                    df_start_dict = dict(data[0].values.tolist())
-                    title = "Test ID: {}, {}, {}".format(df_start_dict['Test:'], df_start_dict['Test Description:'],
-                                                         df_start_dict['TestRegime Suffix:'])
+                    if data_type == 'maccor':
+                        title = 'Maccor Test'
+                        test_info_ = None
+                    else:
+                        test_info_ = test_info_
+                        # df_start_dict = dict(data[0].values.tolist())
+                        test_info_dict = test_info.to_dict()
+                        title = "Test ID: {}, {}, {}".format(test_info_dict['Test:'],
+                                                             test_info_dict['Test Description:'],
+                                                             test_info_dict['TestRegime Suffix:'])
                     threading.Thread(target=multiplot,
                                      args=(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], True,
                                            values['-PLOT FILE TYPE-'],
-                                           values['-GRID-'], (15, 8), work_folder, data[0], window, True,
+                                           values['-GRID-'], (15, 8), work_folder, test_info_, window, True,
                                            title,)).start()
                 except (NameError, TypeError) as err:
                     Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
@@ -193,6 +200,12 @@ def main_window():
             window['-COL-'].Update(values=df_data.columns.tolist())
             data_type = "maccor"
             window.set_cursor("arrow")
+            cyclemax = cyclesetmax = df_data['Cycle'].max()
+            cyclemin = cyclesetmin = df_data['Cycle'].min()
+            window['-CYCLE MAX-'].Update(range=(cyclemin, cyclemax))
+            window['-CYCLE MAX-'].Update(value=cyclemax)
+            window['-CYCLE MIN-'].Update(range=(cyclemin, cyclemax))
+            window['-CYCLE MIN-'].Update(value=cyclemin)
 
         elif event == '-FILE TO DF-':
             # Filen har importerats som Pandas Data Frame
