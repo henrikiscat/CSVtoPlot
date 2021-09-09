@@ -105,12 +105,11 @@ def main_window():
                     data = df_data
                     test_info_ = None
                 else:
-                    df_start_dict = dict(data[0].values.tolist())
-                    title = "Test ID: {}, {}, {}".format(df_start_dict['Test:'], df_start_dict['Test Description:'],
-                                                         df_start_dict['TestRegime Suffix:'])
+                    test_info_dict = test_info.to_dict()
+                    title = "Test ID: {}, {}, {}".format(test_info_dict['Test:'], test_info_dict['Test Description:'],
+                                                         test_info_dict['TestRegime Suffix:'])
                     data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
-                    test_info_ = data[0]
-                # print(df_data[(df_data['Cycle'] > cyclesetmin) & (df_data['Cycle'] < cyclesetmax)])
+                    test_info_ = test_info #data[0]
                 multiplot(data,
                           values['-COL-'], values['-PLOT STYLE-'], False, '',
                           values['-GRID-'], (17, 9), work_folder, test_info_, window, True, title, test_info)

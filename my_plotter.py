@@ -6,6 +6,7 @@ import matplotlib.colors as matcol
 from pandas.plotting import table
 import matplotlib.transforms as transf
 
+
 def tint_hex(col_rgb, tint):
     rgb_tint = tuple((x + (255 - x)*tint)/255 for x in col_rgb)
     return matcol.to_hex(rgb_tint)
