@@ -67,13 +67,13 @@ def create_layout():
                               alternating_row_color='light grey', background_color="white", text_color="black")]]
     main_layout = [[Sg.Text("Öppna CSV-fil"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
                     Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
-                                  initial_folder='/home/henrik/Dokument/SBT8050 modultestning med AIOS box-TypK-CAN'),
+                                  ),
                     Sg.Text("Arbetskatalog"), Sg.Input(key='-WORK FOLDER-', visible=True, enable_events=True),
                     Sg.FolderBrowse(
-                        initial_folder='/home/henrik/Dokument/SBT8050 modultestning med AIOS box-TypK-CAN')
+                        )
                     ], [Sg.Text("Öppna Maccor-fil"), Sg.Input(key='-MACCOR FILE-', visible=False, enable_events=True),
-                    Sg.FileBrowse(file_types=(('ALL Files', '*'),),
-                                  initial_folder='/home/henrik/Dokument/SBT8050 modultestning med AIOS box-TypK-CAN')],
+                        Sg.FileBrowse(file_types=(('ALL Files', '*'),),
+                                      )],
                    [Sg.Column(layout=left_column), Sg.Column(layout=right_column)],
                    [Sg.Checkbox("Rutmönster", k='-GRID-'), Sg.Button("Visa plot", key='-SHOW PLOT-'),
                     Sg.Combo(values=['-', '.-', '.'], default_value='-', k='-PLOT STYLE-'),
@@ -101,19 +101,19 @@ def main_window():
             try:
                 if data_type == "maccor":
                     title = "Maccor test"
-                    #multiplot(df, values['-COL-'], values['-PLOT STYLE-'], False, '', values['-GRID-'], ())
+                    # multiplot(df, values['-COL-'], values['-PLOT STYLE-'], False, '', values['-GRID-'], ())
                     data = df_data
                     test_info_ = None
                 else:
                     df_start_dict = dict(data[0].values.tolist())
                     title = "Test ID: {}, {}, {}".format(df_start_dict['Test:'], df_start_dict['Test Description:'],
-                                                     df_start_dict['TestRegime Suffix:'])
+                                                         df_start_dict['TestRegime Suffix:'])
                     data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
                     test_info_ = data[0]
-                #print(df_data[(df_data['Cycle'] > cyclesetmin) & (df_data['Cycle'] < cyclesetmax)])
+                # print(df_data[(df_data['Cycle'] > cyclesetmin) & (df_data['Cycle'] < cyclesetmax)])
                 multiplot(data,
-                        values['-COL-'], values['-PLOT STYLE-'], False, '',
-                        values['-GRID-'], (17, 9), work_folder, test_info_, window, True, title, test_info)
+                          values['-COL-'], values['-PLOT STYLE-'], False, '',
+                          values['-GRID-'], (17, 9), work_folder, test_info_, window, True, title, test_info)
             except (NameError, TypeError, IndexError) as err:
                 window.set_cursor("arrow")
                 Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
@@ -140,11 +140,11 @@ def main_window():
             except FileNotFoundError:
                 window.set_cursor("arrow")
         elif event == '-MACCOR FILE-':
-            #window.set_cursor("watch")
+            # window.set_cursor("watch")
             data_type = "maccor"
             df_data = maccor_to_df(values['-MACCOR FILE-'])
             window['-COL-'].Update(values=df_data.columns.tolist())
-            #window.set_cursor("arrow")
+            # window.set_cursor("arrow")
         elif event == '-EXPORT FILE-':
             if work_folder == '':
                 Sg.popup_error('Ingen arbetskatalog vald.')
@@ -156,7 +156,8 @@ def main_window():
                 print("Accumulated file: {}".format(accumulated_file))
                 threading.Thread(target=export_data, args=(window, values['-FILE TYPE-'], df_data.iloc[start:stop, :],
                                                            values['-COL-'], (work_folder + '/' + 'testfil'), data,
-                                                           pd, intertek_color, accumulated_file,test_info,), daemon=True).start()
+                                                           pd, intertek_color, accumulated_file, test_info,),
+                                 daemon=True).start()
                 window.set_cursor("watch")
         elif event == '-EXPORT EXCEPTION-':
             window.set_cursor('arrow')
@@ -173,7 +174,8 @@ def main_window():
                     threading.Thread(target=multiplot,
                                      args=(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], True,
                                            values['-PLOT FILE TYPE-'],
-                                           values['-GRID-'], (15, 8), work_folder, data[0], window, True, title, )).start()
+                                           values['-GRID-'], (15, 8), work_folder, data[0], window, True,
+                                           title,)).start()
                 except (NameError, TypeError) as err:
                     Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == '-ALL-':
@@ -202,7 +204,7 @@ def main_window():
             print(cyclemin)
             df_data["Power [W]"] = df_data["Voltage [mV]"] * df_data["Current [mA]"] / 1000000
             window['-COL-'].Update(values=df_data.columns.tolist())
-            #window['-DESCRIPTION-'].Update(values=data[0].values.tolist())
+            # window['-DESCRIPTION-'].Update(values=data[0].values.tolist())
             window['-DESCRIPTION-'].Update(values=[[key, value] for key, value in test_info.items()])
             window['-CYCLE MAX-'].Update(range=(cyclemin, cyclemax))
             window['-CYCLE MAX-'].Update(value=cyclemax)

@@ -158,7 +158,8 @@ def multiplot(_df, data, style_, save, filetype, grid_on, figsize_, work_folder,
             #info_table(test_info, ax_)
             #annotate_(_df, ax_, rc_annotate)
     if save:
-        file_name = "{}/{}_{}.{}".format(work_folder, dict(df_start.values.tolist())['Test:'], data[0].split('[')[0], filetype)
+        file_name = "{}/{}_{}.{}".format(work_folder, dict(df_start.values.tolist())['Test:'], data[0].split('[')[0],
+                                         filetype)
         plt.savefig(file_name,
                     format=filetype)
         plt.close()
