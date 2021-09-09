@@ -7,5 +7,7 @@ def rename_cols(df):
     return df.rename(columns=new_names)
 
 
-def maccor_to_df(file):
-    return rename_cols(pd.read_table(file, skiprows=1, decimal=',', index_col='Test (Min)'))
+def maccor_to_df(file, window):
+    df = rename_cols(pd.read_table(file, skiprows=1, decimal=',', index_col='Test (Min)'))
+    print("DONE!")
+    window.write_event_value('-MACCOR TO DF-', df)

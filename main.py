@@ -65,7 +65,7 @@ def create_layout():
                     [Sg.Table(values=[[' ', ' ', ' ']], headings=['Variabel', 'Värde', 'Enhet'], k='-UPDATE DETAILS-',
                               col_widths=[20, 17, 5], justification='left', auto_size_columns=False, size=(50, 17),
                               alternating_row_color='light grey', background_color="white", text_color="black")]]
-    main_layout = [[Sg.Text("Öppna CSV-fil"), Sg.Input(key='-FILE-', visible=False, enable_events=True),
+    main_layout = [[Sg.Text("Öppna CSV-fil    ",), Sg.Input(key='-FILE-', visible=False, enable_events=True),
                     Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
                                   ),
                     Sg.Text("Arbetskatalog"), Sg.Input(key='-WORK FOLDER-', visible=True, enable_events=True),
@@ -140,11 +140,11 @@ def main_window():
             except FileNotFoundError:
                 window.set_cursor("arrow")
         elif event == '-MACCOR FILE-':
-            # window.set_cursor("watch")
-            data_type = "maccor"
-            df_data = maccor_to_df(values['-MACCOR FILE-'])
-            window['-COL-'].Update(values=df_data.columns.tolist())
-            # window.set_cursor("arrow")
+            window.set_cursor("watch")
+            threading.Thread(target=maccor_to_df, args=(values['-MACCOR FILE-'], window)).start()
+            #df_data = maccor_to_df(values['-MACCOR FILE-'])
+            #window['-COL-'].Update(values=df_data.columns.tolist())
+
         elif event == '-EXPORT FILE-':
             if work_folder == '':
                 Sg.popup_error('Ingen arbetskatalog vald.')
@@ -189,6 +189,12 @@ def main_window():
             pass
         elif event == '-WORK FOLDER-':
             work_folder = values['-WORK FOLDER-']
+        elif event == '-MACCOR TO DF-':
+            df_data = values['-MACCOR TO DF-']
+            window['-COL-'].Update(values=df_data.columns.tolist())
+            data_type = "maccor"
+            window.set_cursor("arrow")
+
         elif event == '-FILE TO DF-':
             # Filen har importerats som Pandas Data Frame
             window.set_cursor("arrow")

@@ -13,14 +13,16 @@ def tint_hex(col_rgb, tint):
 
 plt.close()
 # black '#ffc700',
-colors = ['#130c0e', '#21b6d7', tint_hex((33, 182, 215), 0.25), tint_hex((33, 182, 215), 0.5), '#474e54',
-          tint_hex((71, 78, 84), 0.25), tint_hex((71, 78, 84), 0.5)]
+#colors = ['#130c0e', '#21b6d7', tint_hex((33, 182, 215), 0.25), tint_hex((33, 182, 215), 0.5), '#474e54',
+ #         tint_hex((71, 78, 84), 0.25), tint_hex((71, 78, 84), 0.5)]
+
+colors = 'bgrcmyk'
 
 rc_annotate = ['Front CAN bus Off error', 'Internal CAN bus Off error', 'TempMax', 'TempMin']
 
 cycler_ = (cycler(color=colors))
 rcParams['font.sans-serif'] = ['Calibri', 'Neo Sans']
-plt.rc('axes', prop_cycle=cycler_, )
+#plt.rc('axes', prop_cycle=cycler_, )
 
 
 def slice_it(units):
@@ -106,11 +108,9 @@ def multiplot(_df, data, style_, save, filetype, grid_on, figsize_, work_folder,
             left_unit = re.sub(']', '', data[0].split('[')[-1])
             right_unit = re.sub(']', '', data[-1].split('[')[-1])
             right_data = [x for x in data if left_unit not in x]
-            #fig, axes = plt.subplots(2, 1)
             ax = _df[data].plot(figsize=figsize_, secondary_y=right_data, legend=False, style=style_)
-            #_df[data].plot(ax=ax, figsize=figsize_, secondary_y=right_data, legend=False, style=style_)
             ax.set_ylabel(left_unit)
-            ax.set_prop_cycle(cycler_)
+            #ax.set_prop_cycle(cycler_)
             lines1, labels1 = ax.get_legend_handles_labels()
             if hasattr(ax, 'right_ax'):
                 ax.right_ax.set_ylabel(right_unit)
