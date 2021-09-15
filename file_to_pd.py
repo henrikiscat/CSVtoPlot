@@ -109,7 +109,6 @@ def file_to_df(_csv_file, window):
                                     squeeze=True,
                                     header=None))
         testinfo = pd.Series(data[0][1].values, data[0][0].values).dropna(axis=0, how='all')
-        #testinfo = testinfo.filter(like='St', axis=0)
         print(testinfo.to_dict())
         start = pd.to_datetime(testinfo.get('Start Time:'), infer_datetime_format=True)
         df_data = pd.read_csv(_csv_file, skiprows=header_row, index_col=False).dropna(axis=1, how='all')

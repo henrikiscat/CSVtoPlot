@@ -1,5 +1,6 @@
 import time
 
+import pandas as pd
 import xlsxwriter
 
 
@@ -76,7 +77,48 @@ def context_tab(df_data, writer, header_format, cell_format, pd):
     formatter(context.iloc[0, :].values, context.iloc[1, :].values, header_format, cell_format, writer.sheets['Context Switching'], 0, None)
 
 
-def export_data(window, filetype, df_data_, data, filename, df_data, pd, color, accumulate, test_info):
+def export_maccor(window, filetype, data, filename, test_info, color):
+    tic = time.process_time()
+    if filetype == "excel":
+        try:
+            filename = filename + '.xlsx'
+            data.index = [f'{x//(3600*1000):02d}:{x%(3600*1000)//(1000*60):02d}' for x in data.index.values.tolist()]
+
+            data.index.name = 'Total Time [hh:mm]'
+            with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
+                workbook = writer.book
+                header_format = workbook.add_format({'bold': True, 'valign': 'top',
+                                                 'fg_color': color,
+                                                 'border': 0, 'align': 'center'})
+                header_format.set_text_wrap()
+
+                #info_format = workbook.add_format({'bold': True, 'align': 'left', 'fg_color': color})
+                #left_aligned = workbook.add_format({'align': 'left'})
+                cell_format = workbook.add_format()
+                data.to_excel(writer, sheet_name='Data')
+                worksheet = writer.sheets['Data']
+                window.write_event_value('-EXPORT MACCOR-', 'APAN')
+                formatter([data.index.name] + data.columns.tolist(), None, header_format, cell_format, worksheet,
+                        0,
+                        False)
+        except PermissionError as e:
+            window.write_event_value('-EXPORT EXCEPTION-',
+                                         "Det gick inte att skriva till filen. Är den öppnad?: {}".format(e))
+            return
+    elif filetype == "text":
+        window.write_event_value('-EXPORT EXCEPTION-', "Exporteraren för texfiler är inte färdig ännu")
+        return
+    elif filetype == "html":
+        window.write_event_value('-EXPORT EXCEPTION-', "Exporteraren för htmlfiler är inte färdig ännu")
+        return
+    toc = time.process_time()
+    total_time = toc - tic
+    window.write_event_value('-EXPORT DONE-',
+                             "Exporten tog: {} minuter och {} sekunder".format(round(total_time // 60),
+                                                                                   round(total_time % 60)))
+
+
+def export_pec(window, filetype, df_data_, data, filename, df_data, pd, color, accumulate, test_info):
     df_start = df_data[0]
     start_row = df_start.shape[0] + 3
     tic = time.process_time()

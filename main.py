@@ -4,13 +4,16 @@ import threading
 
 from matplotlib import pyplot as plt
 
+import file_to_pd
 from file_to_pd import file_to_df
 from maccor_to_df import maccor_to_df
 from my_plotter import multiplot
-from exporter import export_data
+from exporter import export_pec
+from exporter import export_maccor
 import pandas as pd
 import PySimpleGUI as Sg
 import time
+import re
 
 ignored_columns = ['Test', 'Cell', 'Rack', 'Shelf', 'Position', 'Cell ID', 'Load On time', 'Step Time (Seconds)']
 intertek_color = '#ffc700'
@@ -24,7 +27,11 @@ stop_busy = False
 current_file = ""
 test_info = pd.Series
 data_type = ""
-
+axs_margin = .1
+plot_settings = {}
+plot_title = ""
+time_format = "h"
+grid_on_both_axis = True
 
 def busy_window(max_):
     layout_ = [[Sg.ProgressBar(max_, orientation='h', size=(15, 4), k='-PROGRESS BAR-')]]
@@ -44,20 +51,33 @@ def busy_timer(window):
                 time.sleep(0.2)
 
 
-def create_layout():
+menu_def = [['Arkiv', ['Öppna', 'Spara', 'Avbryt', 'Inställningar']], ['Hjälp', 'Om..'], ]
+
+
+def make_graph_title(test_info_dict, values):
+    keys = test_info_dict.keys()
+    title = 'Test ID: '
+    for val in values:
+        if val in keys:
+            title += '{}, '.format(test_info_dict[val])
+    return title.rstrip(', ')
+
+
+def create_main_layout():
     left_column = [[Sg.Text("Datakolumner"), Sg.Button("Markera alla", k='-ALL-'), Sg.Button("Avmarkera alla",
                                                                                              k='-NONE-')],
                    [Sg.Listbox(values=[], size=(50, 30), enable_events=True, k='-COL-',
                                select_mode=Sg.LISTBOX_SELECT_MODE_MULTIPLE)],
-                   [Sg.Text("Urval av data: ")],
-                   [Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-DATA WINDOW SIZE-',
-                              tooltip="Välj storlek på datafönster", default_value=100, enable_events=True),
-                    Sg.Slider(range=(0, 100), resolution=1, orientation='h', k='-DATA WINDOW POSITION-',
-                              tooltip="Välj datafönstrets position", default_value=50, enable_events=True)],
+                   [Sg.Text("Cykelintervall: ")],
+                   #[Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-DATA WINDOW SIZE-',
+                   #           tooltip="Välj storlek på datafönster", default_value=100, enable_events=True),
+                  #  Sg.Slider(range=(0, 100), resolution=1, orientation='h', k='-DATA WINDOW POSITION-',
+                   #           tooltip="Välj datafönstrets position", default_value=50, enable_events=True)],
                    [Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-CYCLE MIN-',
                               tooltip='Välj undre cykelgräns', default_value=0, enable_events=True),
                     Sg.Slider(range=(1, 100), resolution=1, orientation='h', k='-CYCLE MAX-',
                               tooltip='Välj övre cykelgräns', enable_events=True)]]
+
     right_column = [[Sg.Table(values=[[' ', ' ']], headings=['Variabel', 'Värde'], k='-DESCRIPTION-',
                               col_widths=[20, 22], justification='left', auto_size_columns=False,
                               background_color="white", text_color="black",
@@ -65,7 +85,7 @@ def create_layout():
                     [Sg.Table(values=[[' ', ' ', ' ']], headings=['Variabel', 'Värde', 'Enhet'], k='-UPDATE DETAILS-',
                               col_widths=[20, 17, 5], justification='left', auto_size_columns=False, size=(50, 17),
                               alternating_row_color='light grey', background_color="white", text_color="black")]]
-    main_layout = [[Sg.Text("Öppna CSV-fil    ", ), Sg.Input(key='-FILE-', visible=False, enable_events=True),
+    main_layout = [[Sg.Menu(menu_def, tearoff=True)], [Sg.Text("Öppna CSV-fil    ", ), Sg.Input(key='-FILE-', visible=False, enable_events=True),
                     Sg.FileBrowse(file_types=(('ALL Files', '*.csv'),),
                                   ),
                     Sg.Text("Arbetskatalog"), Sg.Input(key='-WORK FOLDER-', visible=True, enable_events=True),
@@ -75,7 +95,8 @@ def create_layout():
                         Sg.FileBrowse(file_types=(('ALL Files', '*'),),
                                       )],
                    [Sg.Column(layout=left_column), Sg.Column(layout=right_column)],
-                   [Sg.Checkbox("Rutmönster", k='-GRID-'), Sg.Button("Visa plot", key='-SHOW PLOT-'),
+                   [Sg.Checkbox("Rutmönster", k='-GRID-'), Sg.Checkbox("Justera axlar", k='-GRID ON BOTH-'),
+                    Sg.Button("Visa plot", key='-SHOW PLOT-'),
                     Sg.Combo(values=['-', '.-', '.'], default_value='-', k='-PLOT STYLE-'),
                     Sg.Text("Spara plot som:"),
                     Sg.Combo(values=['pdf'], default_value='pdf', readonly=True, enable_events=False,
@@ -88,35 +109,55 @@ def create_layout():
     return main_layout
 
 
+def create_plotting_layout():
+    global plot_title
+    layout = [[Sg.Text('Titel:'), Sg.InputText(default_text=plot_title)]]
+    return layout
+
+
+def plotting_window():
+    plot_window = Sg.Window("Inställingar plottning", create_plotting_layout())
+    settings_dict = {}
+    while True:
+        event, values = plot_window.read()
+        if event == Sg.WINDOW_CLOSED or event == '-ABORT-':
+            break
+        elif event == '-OK-':
+            return settings_dict
+
+
 def main_window():
-    global df_data, busy_id, cyclemin, cyclemax, cyclesetmax, cyclesetmin, current_file, data_type
-    window = Sg.Window("Main window", create_layout())
+    global df_data, busy_id, cyclemin, cyclemax, cyclesetmax, cyclesetmin, current_file, data_type, plot_settings, \
+        time_format
+    window = Sg.Window("CSVtoPlot", create_main_layout())
     while True:
         global rows, pos, df_data, size, start, stop, work_folder, df_context, stop_busy, test_info
         event, values = window.read()
         if event == Sg.WINDOW_CLOSED:
             break
         elif event == "-SHOW PLOT-":
+            print("Values: {}".format(values['-GRID ON BOTH-']))
             window.set_cursor("watch")
             try:
+                test_info_dict = test_info.to_dict()
                 if data_type == "maccor":
-                    title = "Maccor test"
-                    # multiplot(df, values['-COL-'], values['-PLOT STYLE-'], False, '', values['-GRID-'], ())
+                    title = "Test ID: {}, Date of Test: {}".format(test_info_dict['Comment/Barcode:'],
+                                                                   test_info_dict['Date of Test:'].strftime('%Y-%m-%d'))
                     data = df_data
-                    test_info_ = None
+                    time_format_ = time_format
                 else:
                     test_info_dict = test_info.to_dict()
-                    title = "Test ID: {}, {}, {}".format(test_info_dict['Test:'], test_info_dict['Test Description:'],
-                                                         test_info_dict['TestRegime Suffix:'])
-                    test_info_ = test_info  # data[0]
-                data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
+                    title = make_graph_title(test_info_dict, ['Test:', 'Test Description:', 'TestRegime Suffix:'])
+                    time_format_ = None
+                if 'Cycle' in df_data.columns:
+                    data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
                 multiplot(data,
                           values['-COL-'], values['-PLOT STYLE-'], False, '',
-                          values['-GRID-'], (17, 9), work_folder, test_info_, window, True, title, test_info)
-            except (NameError, TypeError, IndexError) as err:
+                          values['-GRID-'], (17, 9), work_folder, test_info, window, True, title, test_info, axs_margin, time_format_, values['-GRID ON BOTH-'])
+            except (NameError, IndexError, TypeError, KeyError) as err:
                 window.set_cursor("arrow")
                 Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
-
+#
         elif event == "-DATA WINDOW POSITION-":
             rows = df_data.shape[0]
             pos = round(values['-DATA WINDOW POSITION-'] * rows // 100)
@@ -139,25 +180,39 @@ def main_window():
             except FileNotFoundError:
                 window.set_cursor("arrow")
         elif event == '-MACCOR FILE-':
-            window.set_cursor("watch")
-            threading.Thread(target=maccor_to_df, args=(values['-MACCOR FILE-'], window)).start()
-            # df_data = maccor_to_df(values['-MACCOR FILE-'])
-            # window['-COL-'].Update(values=df_data.columns.tolist())
-
+            try:
+                file = values['-MACCOR FILE-']
+                if file != current_file:
+                    current_file = file
+                    window.set_cursor("watch")
+                    threading.Thread(target=maccor_to_df, args=(values['-MACCOR FILE-'], window)).start()
+                else:
+                    pass
+            except (FileNotFoundError, AttributeError):
+                window.set_cursor("arrow")
+            except (AttributeError) as e:
+                Sg.popup_error("Något gick snett. Har du valt en Maccor fil? : {}".format(e))
         elif event == '-EXPORT FILE-':
             if work_folder == '':
                 Sg.popup_error('Ingen arbetskatalog vald.')
             else:
-
-                accumulated_file = Sg.PopupGetFile("Välj fil att akumulera data från",
-                                                   file_types=(('ALL Files', '*.xlsx'),)) if values["-ACCUMULATE-"] \
-                    else None
-                print("Accumulated file: {}".format(accumulated_file))
-                threading.Thread(target=export_data, args=(window, values['-FILE TYPE-'], df_data.iloc[start:stop, :],
-                                                           values['-COL-'], (work_folder + '/' + 'testfil'), data,
-                                                           pd, intertek_color, accumulated_file, test_info,),
-                                 daemon=True).start()
-                window.set_cursor("watch")
+                if data_type == "maccor":
+                    window.set_cursor("watch")
+                    if 'Cycle' in df_data.columns:
+                        data = df_data[(df_data['Cycle'] >= cyclesetmin) & (df_data['Cycle'] <= cyclesetmax)]
+                    data = data[values['-COL-']]
+                    threading.Thread(target=export_maccor, args=(window, values['-FILE TYPE-'], data,
+                                                          (work_folder + '/maccor_' + re.sub(':', '', test_info.to_dict()['Comment/Barcode:'], )), test_info, intertek_color,)).start()
+                else:
+                    accumulated_file = Sg.PopupGetFile("Välj fil att akumulera data från",
+                                                       file_types=(('ALL Files', '*.xlsx'),)) if values["-ACCUMULATE-"] \
+                        else None
+                    print("Accumulated file: {}".format(accumulated_file))
+                    threading.Thread(target=export_pec, args=(window, values['-FILE TYPE-'], df_data.iloc[start:stop, :],
+                                                               values['-COL-'], (work_folder + '/' + 'testfil'), data,
+                                                               pd, intertek_color, accumulated_file, test_info,),
+                                     daemon=True).start()
+                    window.set_cursor("watch")
         elif event == '-EXPORT EXCEPTION-':
             window.set_cursor('arrow')
             Sg.PopupError(values['-EXPORT EXCEPTION-'])
@@ -174,14 +229,15 @@ def main_window():
                         test_info_ = test_info_
                         # df_start_dict = dict(data[0].values.tolist())
                         test_info_dict = test_info.to_dict()
-                        title = "Test ID: {}, {}, {}".format(test_info_dict['Test:'],
-                                                             test_info_dict['Test Description:'],
-                                                             test_info_dict['TestRegime Suffix:'])
+                        title = make_graph_title(test_info_dict, ['Test:', 'Test Description:', 'TestRegime Suffix:'])
+                        #title = "Test ID: {}, {}, {}".format(test_info_dict['Test:'],
+                                                            # test_info_dict['Test Description:'],
+                                                             #test_info_dict['TestRegime Suffix:'])
                     threading.Thread(target=multiplot,
                                      args=(df_data.iloc[start:stop, :], values['-COL-'], values['-PLOT STYLE-'], True,
                                            values['-PLOT FILE TYPE-'],
                                            values['-GRID-'], (15, 8), work_folder, test_info_, window, True,
-                                           title,)).start()
+                                           title, axs_margin, time_format, values['-GRID ON BOTH-'])).start()
                 except (NameError, TypeError) as err:
                     Sg.PopupOK("Ingen data vald. \nError: {}".format(err), title="Ingen data")
         elif event == '-ALL-':
@@ -196,19 +252,25 @@ def main_window():
         elif event == '-WORK FOLDER-':
             work_folder = values['-WORK FOLDER-']
         elif event == '-MACCOR TO DF-':
-            df_data = values['-MACCOR TO DF-']
+            df_data, test_info = values['-MACCOR TO DF-']
             window['-COL-'].Update(values=df_data.columns.tolist())
+            window['-DESCRIPTION-'].Update(values=[[key, value] for key, value in test_info.items()])
             data_type = "maccor"
             window.set_cursor("arrow")
-            cyclemax = cyclesetmax = df_data['Cycle'].max()
-            cyclemin = cyclesetmin = df_data['Cycle'].min()
-            window['-CYCLE MAX-'].Update(range=(cyclemin, cyclemax))
-            window['-CYCLE MAX-'].Update(value=cyclemax)
-            window['-CYCLE MIN-'].Update(range=(cyclemin, cyclemax))
-            window['-CYCLE MIN-'].Update(value=cyclemin)
+            if 'Cycle' in df_data.columns:
+                cyclemax = cyclesetmax = df_data['Cycle'].max()
+                cyclemin = cyclesetmin = df_data['Cycle'].min()
+                window['-CYCLE MAX-'].Update(range=(cyclemin, cyclemax))
+                window['-CYCLE MAX-'].Update(value=cyclemax)
+                window['-CYCLE MIN-'].Update(range=(cyclemin, cyclemax))
+                window['-CYCLE MIN-'].Update(value=cyclemin)
+            else:
+                window['-CYCLE MAX-'].Update(disabled=True)
+                window['-CYCLE MIN-'].Update(disabled=True)
 
         elif event == '-FILE TO DF-':
             # Filen har importerats som Pandas Data Frame
+            data_type = "pec"
             window.set_cursor("arrow")
             value = values['-FILE TO DF-']
             data = value[0]
@@ -231,10 +293,10 @@ def main_window():
             if len(data) > 1:
                 window['-UPDATE DETAILS-'].Update(values=data[-1].values.tolist())
             rows = df_data.shape[0]
-            size = round(values['-DATA WINDOW SIZE-'] * rows // 100)
-            pos = round(values['-DATA WINDOW POSITION-'] * rows // 100)
-            start = (lambda x: 0 if x < 0 else x)(int(pos - size / 2))
-            stop = (lambda x: rows if x > rows else x)(int(pos + size / 2))
+            #size = round(values['-DATA WINDOW SIZE-'] * rows // 100)
+            #pos = round(values['-DATA WINDOW POSITION-'] * rows // 100)
+            #start = (lambda x: 0 if x < 0 else x)(int(pos - size / 2))
+            #stop = (lambda x: rows if x > rows else x)(int(pos + size / 2))
         elif event == '-FILE TO DF EXCEPTION-':
             window.set_cursor('arrow')
             Sg.PopupError(values['-FILE TO DF EXCEPTION-'])
@@ -251,6 +313,10 @@ def main_window():
             window['-CYCLE MIN-'].Update(range=(cyclemin, cyclesetmax))
             if cyclesetmax < cyclesetmin:
                 window['-CYCLE MIN-'].Update(value=cyclesetmax)
+        elif event == 'Inställningar':
+            print('Inst')
+        elif event == '-EXPORT MACCOR-':
+            window.set_cursor("arrow")
     window.close()
 
 
